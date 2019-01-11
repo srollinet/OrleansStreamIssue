@@ -35,11 +35,13 @@ namespace OrleansStreamIssue.Client
                 var handle = await stream.SubscribeAsync(observer);
                 var resumeTimer = new Timer(async state =>
                 {
-                    handle = await handle.ResumeAsync(observer);
                     try
                     {
                         await host.GetGrain<IIsAliveGrain>(0).IsAlive();
                         _logger.LogInformation("Server is alive!");
+
+                        handle = await handle.ResumeAsync(observer);
+                        _logger.LogInformation("Stream subscription has been resumed!");
                     }
                     catch (Exception)
                     {
@@ -75,6 +77,10 @@ namespace OrleansStreamIssue.Client
                 .AddSimpleMessageStreamProvider(Constants.StreamProviderName)
                 .ConfigureApplicationParts(parts =>
                     parts.AddApplicationPart(typeof(IIsAliveGrain).Assembly).WithReferences())
+                .AddClusterConnectionLostHandler((sender, args) =>
+                {
+                    _logger.LogError("Connection with the cluster is lost");
+                })
                 .Build();
 
             _logger = client.ServiceProvider.GetService<ILogger<Program>>();
