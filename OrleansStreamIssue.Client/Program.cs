@@ -36,6 +36,15 @@ namespace OrleansStreamIssue.Client
                 var resumeTimer = new Timer(async state =>
                 {
                     handle = await handle.ResumeAsync(observer);
+                    try
+                    {
+                        await host.GetGrain<IIsAliveGrain>(0).IsAlive();
+                        _logger.LogInformation("Server is alive!");
+                    }
+                    catch (Exception)
+                    {
+                        _logger.LogError("Server is not alive!");
+                    }
                 }, null,
                 TimeSpan.FromSeconds(10), TimeSpan.FromSeconds(10));
 
@@ -64,6 +73,8 @@ namespace OrleansStreamIssue.Client
                 .UseLocalhostClustering()
                 .ConfigureLogging(logging => logging.AddConsole())
                 .AddSimpleMessageStreamProvider(Constants.StreamProviderName)
+                .ConfigureApplicationParts(parts =>
+                    parts.AddApplicationPart(typeof(IIsAliveGrain).Assembly).WithReferences())
                 .Build();
 
             _logger = client.ServiceProvider.GetService<ILogger<Program>>();

@@ -1,8 +1,4 @@
-﻿using System;
-using System.Net;
-using System.Threading;
-using System.Threading.Tasks;
-using Microsoft.Extensions.DependencyInjection;
+﻿using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Orleans;
 using Orleans.Configuration;
@@ -10,6 +6,10 @@ using Orleans.Hosting;
 using OrleansStreamIssue.Contracts;
 using OrleansStreamIssue.Contracts.Data;
 using OrleansStreamIssue.Grains;
+using System;
+using System.Net;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace OrleansStreamIssue.Server
 {
@@ -53,15 +53,17 @@ namespace OrleansStreamIssue.Server
             // define the cluster configuration
             var builder = new SiloHostBuilder()
                 .UseLocalhostClustering()
+                .Configure<EndpointOptions>(options => options.AdvertisedIPAddress = IPAddress.Loopback)
                 .Configure<ClusterOptions>(options =>
                 {
                     options.ClusterId = Constants.ClusterId;
                     options.ServiceId = Constants.ServiceId;
                 })
                 .AddSimpleMessageStreamProvider(Constants.StreamProviderName)
-                .AddMemoryGrainStorage("PubSubStore")
-                .Configure<EndpointOptions>(options => options.AdvertisedIPAddress = IPAddress.Loopback)
-                .ConfigureApplicationParts(parts => parts.AddApplicationPart(typeof(EventHubGrain).Assembly).WithReferences())
+                .AddMongoDBGrainStorage("PubSubStore",
+                    options => { options.ConnectionString = "mongodb://localhost:27017/OrleansStorage"; })
+                .ConfigureApplicationParts(parts =>
+                    parts.AddApplicationPart(typeof(EventHubGrain).Assembly).WithReferences())
                 .ConfigureLogging(logging => logging.AddConsole())
                 .EnableDirectClient();
 
