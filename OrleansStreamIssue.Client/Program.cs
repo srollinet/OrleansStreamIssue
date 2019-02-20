@@ -51,7 +51,7 @@ namespace OrleansStreamIssue.Client
                 //TimeSpan.FromSeconds(10), TimeSpan.FromSeconds(10));
 
                 Console.WriteLine("Press Enter to terminate...");
-                Console.ReadLine();
+                await Task.Run(Console.ReadKey);
 
                 //resumeTimer.Dispose();
                 await host.Close();
@@ -109,7 +109,7 @@ namespace OrleansStreamIssue.Client
             await client.Connect(RetryFilter);
 
             var busControl = client.ServiceProvider.GetService<IBusControl>();
-            await busControl.StartAsync();
+            busControl.Start();
 
             return client;
         }
