@@ -2,12 +2,12 @@
 using Microsoft.Extensions.Logging;
 using Orleans;
 using Orleans.Configuration;
-using Orleans.Hosting;
 using OrleansStreamIssue.Contracts;
-using OrleansStreamIssue.Contracts.Data;
 using System;
-using System.Threading;
 using System.Threading.Tasks;
+using GreenPipes;
+using MassTransit;
+using OrleansStreamIssue.Contracts.Data;
 
 namespace OrleansStreamIssue.Client
 {
@@ -28,32 +28,32 @@ namespace OrleansStreamIssue.Client
             {
                 var host = await StartClient();
 
-                var streamProvider = host.GetStreamProvider(Constants.StreamProviderName);
-                var stream = streamProvider.GetStream<SimpleEvent>(Guid.Empty, nameof(SimpleEvent));
-                var observer = new StreamObserver(_logger);
+                //var streamProvider = host.GetStreamProvider(Constants.StreamProviderName);
+                //var stream = streamProvider.GetStream<SimpleEvent>(Guid.Empty, nameof(SimpleEvent));
+                //var observer = new StreamObserver(_logger);
 
-                var handle = await stream.SubscribeAsync(observer);
-                var resumeTimer = new Timer(async state =>
-                {
-                    try
-                    {
-                        await host.GetGrain<IIsAliveGrain>(0).IsAlive();
-                        _logger.LogInformation("Server is alive!");
+                //var handle = await stream.SubscribeAsync(observer);
+                //var resumeTimer = new Timer(async state =>
+                //{
+                //    try
+                //    {
+                //        await host.GetGrain<IIsAliveGrain>(0).IsAlive();
+                //        _logger.LogInformation("Server is alive!");
 
-                        handle = await handle.ResumeAsync(observer);
-                        _logger.LogInformation("Stream subscription has been resumed!");
-                    }
-                    catch (Exception)
-                    {
-                        _logger.LogError("Server is not alive!");
-                    }
-                }, null,
-                TimeSpan.FromSeconds(10), TimeSpan.FromSeconds(10));
+                //        handle = await handle.ResumeAsync(observer);
+                //        _logger.LogInformation("Stream subscription has been resumed!");
+                //    }
+                //    catch (Exception)
+                //    {
+                //        _logger.LogError("Server is not alive!");
+                //    }
+                //}, null,
+                //TimeSpan.FromSeconds(10), TimeSpan.FromSeconds(10));
 
                 Console.WriteLine("Press Enter to terminate...");
                 Console.ReadLine();
 
-                resumeTimer.Dispose();
+                //resumeTimer.Dispose();
                 await host.Close();
 
                 return 0;
@@ -74,18 +74,42 @@ namespace OrleansStreamIssue.Client
                 })
                 .UseLocalhostClustering()
                 .ConfigureLogging(logging => logging.AddConsole())
-                .AddSimpleMessageStreamProvider(Constants.StreamProviderName)
                 .ConfigureApplicationParts(parts =>
                     parts.AddApplicationPart(typeof(IIsAliveGrain).Assembly).WithReferences())
                 .AddClusterConnectionLostHandler((sender, args) =>
                 {
                     _logger.LogError("Connection with the cluster is lost");
                 })
+                .ConfigureServices(services =>
+                {
+                    services.AddMassTransit(x =>
+                    {
+                        x.AddConsumer<SimpleEventConsumer>();
+                        x.AddBus(provider => Bus.Factory.CreateUsingRabbitMq(cfg =>
+                        {
+                            cfg.UseRetry(retry => retry.Interval(100, 200));
+                            var host = cfg.Host(new Uri("rabbitmq://localhost"), h =>
+                            {
+                                h.Username("rabbitmq");
+                                h.Password("rabbitmq");
+                            });
+
+                            cfg.ReceiveEndpoint(host, ep =>
+                            {
+                                ep.ConfigureConsumer<SimpleEventConsumer>(provider);
+                                EndpointConvention.Map<SimpleEvent>(ep.InputAddress);
+                            });
+                        }));
+                    });
+                })
                 .Build();
 
             _logger = client.ServiceProvider.GetService<ILogger<Program>>();
 
             await client.Connect(RetryFilter);
+
+            var busControl = client.ServiceProvider.GetService<IBusControl>();
+            await busControl.StartAsync();
 
             return client;
         }

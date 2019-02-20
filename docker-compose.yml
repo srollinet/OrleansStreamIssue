@@ -2,6 +2,17 @@ version: '3'
 services:
     mongodb:
         image: mongo:latest
-        container_name: "mongodb"
+        container_name: mongodb
         ports:
             - 27017:27017
+
+    rabbit:
+        image: rabbitmq:3.7.11-management-alpine
+        container_name: rabbit
+        environment:
+            RABBITMQ_DEFAULT_USER: "rabbitmq"
+            RABBITMQ_DEFAULT_PASS: "rabbitmq"
+            RABBITMQ_DEFAULT_VHOST: "/"
+        ports:
+        - "15672:15672"
+        - "5672:5672"
